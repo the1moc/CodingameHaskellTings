@@ -1,3 +1,5 @@
+module Onboarding where
+
 import           Control.Monad
 import           System.IO
 

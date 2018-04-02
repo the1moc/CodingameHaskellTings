@@ -1,16 +1,23 @@
+module Positions where
+
 import           Control.Monad
 import           Data.List
 import           Data.Maybe
 import           System.IO
 
-data Coordinate = Coord Int Int Int Int Int Int
+data Node = Node { valid                    :: Bool,
+                   placement                :: Placement,
+                   rightNeighbourPlacement  :: Placement,
+                   bottomNeighbourPlacement :: Placement }
+                   deriving Show
+
+data Placement = Placement { position :: Int, row :: Int  }
   deriving Show
+  -- deriving (Show)
 
 main :: IO ()
 main = do
     hSetBuffering stdout NoBuffering -- DO NOT REMOVE
-
-    -- Don't let the machines win. You are humanity's last hope...
 
     input_line <- getLine
     let width = read input_line :: Int -- the number of cells on the X axis
@@ -19,23 +26,67 @@ main = do
 
     lines <- replicateM height $ do
         line <- getLine
-        let zippedLine = zip [0..] line
-        return (zippedLine)
-    let zippedLines = zip [0..] lines
-    -- Three coordinates: a node, its right neighbor, its bottom neighbor
-    let results = map (\(lineIndex, line) -> checkPositions lineIndex line) zippedLines
-          where checkPositions lineIndex line = map (\node -> checkPosition node lineIndex width height) line
-    mapM_ (\l -> mapM_ (\x -> putStrLn $ getValue $ fromJust x) l) results
+        let unformedNodesWithIndexes = zip [0..] line
+        return unformedNodesWithIndexes
+
+    let linesWithIndexes = zip [0..] lines
+    let nodes = map createNodes linesWithIndexes
+          where createNodes (lineIndex, unformedNodes) = map (\node -> createNode node lineIndex) unformedNodes
+    let validNodes = filter (\n -> isNodeValid n) $ flattenNodes nodes
+    let nodeStrings = map (\n -> generateNodeString n nodes) validNodes
+    mapM_ putStrLn nodeStrings
     return ()
 
-checkPosition :: (Int, Char) -> Int -> Int -> Int -> Maybe Coordinate
--- checkPosition '.' _ _ _ _ = Nothing
-checkPosition (index, node) row width height
-  | index == 0 && row == 0 = Just $ Coord index row (index + 1) row index (row + 1)
-  | index == 0 && row == (height - 1) = Just $ Coord index row (index + 1) row (-1) (-1)
-  | index == (width - 1) && row == (height - 1) = Just $ Coord index row (-1) (-1) (-1) (-1)
-  | index == (width - 1) && row == 0 = Just $ Coord index row (-1) (-1) index (row + 1)
-  | otherwise = Just $ Coord index row (index + 1) row index (row + 1)
+-- Create a node with a given position and validity.
+createNode :: (Int, Char) -> Int -> Node
+createNode (i, '0') lineIndex = Node { valid = True,
+                             placement = Placement { position = i, row = lineIndex },
+                             rightNeighbourPlacement = Placement { position = i + 1, row = lineIndex },
+                             bottomNeighbourPlacement = Placement { position = i, row = lineIndex + 1 }  }
+createNode (i, '.') lineIndex = Node { valid = False,
+                             placement = Placement { position = i, row = lineIndex },
+                             rightNeighbourPlacement = Placement { position = i + 1, row = lineIndex },
+                             bottomNeighbourPlacement = Placement { position = i, row = lineIndex + 1 } }
 
-getValue :: Coordinate -> String
-getValue (Coord a b c d e f) = show a ++ " " ++ show b ++ " " ++  show c ++ " " ++ show d ++ " " ++  show e ++ " " ++  show f
+
+flattenNodes :: [[Node]] -> [Node]
+flattenNodes = concat
+
+isNodeValid :: Node -> Bool
+isNodeValid (Node True _ _ _) = True
+isNodeValid (Node False _ _ _) = False
+
+generateNodeString :: Node -> [[Node]] -> String
+generateNodeString node nodes = thisNodePosition ++ rightNodePosition ++ bottomNodePosition
+    where thisNodePosition = (show $ row (placement node)) ++ " " ++ (show $ position (placement node)) ++ " "
+          rightNodePosition =
+            let rightRow = safeLookup (row (rightNeighbourPlacement node)) nodes
+                in case rightRow of
+                    Nothing -> "-1 -1 "
+                    Just a  -> let rightPosition = safeLookup (position (rightNeighbourPlacement node)) $ fromJust rightRow
+                                  in case rightPosition of
+                                      Nothing -> "-1 -1 "
+                                      Just b -> case valid b of
+                                          True -> (show $ position (placement b)) ++ " " ++ (show $ row (placement b)) ++ " "
+                                          False -> "-1 -1 "
+          bottomNodePosition =
+            let rightRow = safeLookup (row (bottomNeighbourPlacement node)) nodes
+              in case rightRow of
+                Nothing -> "-1 -1"
+                Just a  -> let bottomPosition = safeLookup (position (bottomNeighbourPlacement node)) $ fromJust rightRow
+                              in case bottomPosition of
+                                  Nothing -> "-1 -1"
+                                  Just b -> case valid b of
+                                      True -> (show $ position (placement b)) ++ " " ++ (show $ row (placement b))
+                                      False -> "-1 -1"
+
+
+getValue :: Node -> String
+getValue (Node a b c d) = show a ++ " " ++ show b ++ " " ++  show c ++ " " ++ show d
+
+-- Safe index function to replace shitty !!
+safeLookup :: Int -> [a] -> Maybe a
+safeLookup _ []       = Nothing
+safeLookup (-1) _     = Nothing
+safeLookup 0 (x : _)  = Just x
+safeLookup i (_ : xs) = safeLookup (i - 1) xs
