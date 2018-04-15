@@ -18,7 +18,7 @@ main = do
   let decodedMessage = concatMap (updateLength . toBinary . ord) message
   putStrLn . init $ concatMap generateString $ separate decodedMessage
                     where generateString ('0':xs) = "00 0" ++ xs ++ " "
-                          generateString ('1':xs) = "0 0" ++ take (length xs) (cycle "0") ++ " "
+                          generateString ('1':xs) = "0 0" ++ replicate (length xs) '0' ++ " "
 
 separate :: String -> [[Char]]
 separate [] = []
